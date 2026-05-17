@@ -74,7 +74,7 @@ type Order = {
   orderNumber: string;
   items: CartItem[];
   total: number;
-  status: 'PREPARANDO' | 'PRONTO' | 'ENTREGUE';
+  status: 'NOVO' | 'PREPARANDO' | 'PRONTO' | 'ENTREGUE';
   createdAt: string;
   customerName: string;
   customerPhone?: string;
