@@ -37,25 +37,24 @@ type StoreSettings = {
   bannerTitle: string;
   bannerDescription: string;
 };
-
 const INITIAL_PRODUCTS: Product[] = [
-  { 
-    id: 1, 
-    name: 'Taça de Morango Especial', 
-    description: 'Sorvete artesanal com pedaços de morango e chantilly.', 
-    price: 22.90, 
-    category: 'Sorvetes', 
+  {
+    id: 1,
+    name: 'Taça de Morango Especial',
+    description: 'Sorvete artesanal com pedaços de morango e chantilly.',
+    price: 22.90,
+    category: 'Sorvetes',
     image: 'https://picsum.photos/seed/icecream1/400/300',
-    extras: [{ id: 'e1', name: 'Calda Extra', price: 2.50 }, { id: 'e2', name: 'Nutella', price: 4.0 }, { id: 'e3', name: 'Granulado', price: 1.5 }]
+    extras: [{ id: 1, name: 'Calda Extra', price: 2.50 }, { id: 2, name: 'Nutella', price: 4.0 }, { id: 3, name: 'Granulado', price: 1.5 }]
   },
-  { 
-    id: 3, 
-    name: 'Hambúrguer Caseiro Duplo', 
-    description: 'Pão brioche, 2 carnes 150g, queijo cheddar, alface e bacon.', 
-    price: 32.00, 
-    category: 'Lanches', 
+  {
+    id: 3,
+    name: 'Hambúrguer Caseiro Duplo',
+    description: 'Pão brioche, 2 carnes 150g, queijo cheddar, alface e bacon.',
+    price: 32.00,
+    category: 'Lanches',
     image: 'https://picsum.photos/seed/burger1/400/300',
-    extras: [{ id: 'e4', name: 'Bacon Extra', price: 4.5 }, { id: 'e5', name: 'Queijo Extra', price: 3.0 }]
+    extras: [{ id: 4, name: 'Bacon Extra', price: 4.5 }, { id: 5, name: 'Queijo Extra', price: 3.0 }]
   },
   { id: 2, name: 'SorveTudo de Chocolate', description: 'Três bolas de chocolate, calda e granulado.', price: 18.50, category: 'Sorvetes', image: 'https://picsum.photos/seed/icecream2/400/300' },
   { id: 4, name: 'Smashed Burger Simples', description: 'Pão brioche, carne 90g e queijo prato.', price: 19.90, category: 'Lanches', image: 'https://picsum.photos/seed/burger2/400/300' },
@@ -88,14 +87,14 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'menu' | 'cart' | 'orders'>('menu');
   const [activeCategory, setActiveCategory] = useState('Todos');
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   type CategoryItem = { id?: number | string, name: string };
   const [categories, setCategories] = useState<CategoryItem[]>([{ id: 'todos', name: 'Todos' }]);
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoadingMenu, setIsLoadingMenu] = useState(true);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [orderSuccessMsg, setOrderSuccessMsg] = useState<{orderNumber: string} | null>(null);
-  
+  const [orderSuccessMsg, setOrderSuccessMsg] = useState<{ orderNumber: string } | null>(null);
+
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [tempExtras, setTempExtras] = useState<Extra[]>([]);
   const [tempSize, setTempSize] = useState<Size | undefined>(undefined);
@@ -126,7 +125,7 @@ export default function Home() {
         setDeliveryType('MESA');
         setIsTableFromUrl(true);
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // Hydrate states from localStorage on client mount to avoid hydration mismatch
     try {
@@ -136,22 +135,22 @@ export default function Home() {
         if (parsed.name) setCustomerName(parsed.name);
         if (parsed.phone) setCustomerPhone(parsed.phone);
       }
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       const savedStatus = localStorage.getItem('sorvefood_store_status');
       if (savedStatus !== null) setStoreOpen(JSON.parse(savedStatus));
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       const savedSettings = localStorage.getItem('sorvefood_store_settings');
       if (savedSettings) setStoreSettings(JSON.parse(savedSettings));
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       const savedOrders = localStorage.getItem('sorvefood_orders');
       if (savedOrders) setMyOrders(JSON.parse(savedOrders));
-    } catch (e) {}
+    } catch (e) { }
 
     async function fetchData() {
       setIsLoadingMenu(true);
@@ -161,7 +160,7 @@ export default function Home() {
         supabase.from('product_sizes').select('*'),
         supabase.from('product_extras').select('*')
       ]);
-      
+
       if (cats) setCategories([{ id: 'todos', name: 'Todos' }, ...cats.map(c => ({ id: c.id, name: c.name }))]);
       if (prods) {
         setProducts(prods.map(p => ({
@@ -187,7 +186,7 @@ export default function Home() {
         if (updated) setStoreSettings(JSON.parse(updated));
       }
       if (e.key === 'sorvefood_store_status') {
-         setStoreOpen(e.newValue ? JSON.parse(e.newValue) : true);
+        setStoreOpen(e.newValue ? JSON.parse(e.newValue) : true);
       }
     };
     window.addEventListener('storage', handleCatsChange);
@@ -331,8 +330,8 @@ export default function Home() {
     try {
       const { data: orderData, error: orderError } = await supabase.from('orders').insert(newOrderDB).select().single();
       if (orderError) {
-         console.error("Erro orders:", orderError.message, orderError.details, orderError.hint, orderError.code);
-         throw orderError;
+        console.error("Erro orders:", orderError.message, orderError.details, orderError.hint, orderError.code);
+        throw orderError;
       }
 
       for (const item of cartItems) {
@@ -352,9 +351,9 @@ export default function Home() {
 
         if (item.selectedExtras.length > 0 && itemData) {
           const extrasToInsert = item.selectedExtras.map(ex => ({
-             order_item_id: itemData.id,
-             extra_id: Number(ex.id),
-             price: parseFloat((ex.price || 0).toFixed(2))
+            order_item_id: itemData.id,
+            extra_id: Number(ex.id),
+            price: parseFloat((ex.price || 0).toFixed(2))
           }));
           const { error: extError } = await supabase.from('order_item_extras').insert(extrasToInsert);
           if (extError) {
@@ -412,7 +411,7 @@ export default function Home() {
 
       {/* CONTEÚDOS DAS ABAS */}
       <main className="max-w-3xl mx-auto px-4 py-6">
-        
+
         {/* ABA: CARDÁPIO */}
         {activeTab === 'menu' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -435,11 +434,10 @@ export default function Home() {
                   <button
                     key={category.id || category.name}
                     onClick={() => setActiveCategory(category.name)}
-                    className={`flex-shrink-0 px-5 py-2.5 rounded-full font-medium transition-all text-sm ${
-                      activeCategory === category.name 
-                        ? 'bg-amber-500 text-white shadow-md' 
+                    className={`flex-shrink-0 px-5 py-2.5 rounded-full font-medium transition-all text-sm ${activeCategory === category.name
+                        ? 'bg-amber-500 text-white shadow-md'
                         : 'bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50'
-                    }`}
+                      }`}
                   >
                     {category.name}
                   </button>
@@ -452,25 +450,26 @@ export default function Home() {
               {filteredProducts.map(product => {
                 const available = product.isAvailable !== false;
                 return (
-                <div key={product.id} className={`bg-white rounded-3xl p-3 shadow-sm transition-shadow border flex gap-4 overflow-hidden items-center relative ${available ? 'hover:shadow-md cursor-pointer' : 'opacity-60 grayscale cursor-not-allowed'}`} onClick={() => available && openProductCustomization(product)}>
-                  {!available && (
-                     <div className="absolute top-2 left-2 bg-neutral-800 text-white text-[10px] font-black px-2 py-1 rounded-md tracking-wider z-10 shadow-sm">ESGOTADO</div>
-                  )}
-                  <div className="relative h-24 w-24 shrink-0 bg-neutral-100 rounded-2xl overflow-hidden">
-                    <Image src={product.image} alt={product.name} fill className="object-cover" referrerPolicy="no-referrer" />
-                  </div>
-                  <div className="flex flex-col flex-1 py-1 pr-2">
-                    <h3 className="font-bold text-sm leading-tight mb-1">{product.name}</h3>
-                    <p className="text-neutral-500 text-xs mb-2 line-clamp-2">{product.description}</p>
-                    <div className="flex justify-between items-center mt-auto">
-                      <span className={`font-extrabold text-sm ${available ? 'text-neutral-900' : 'text-neutral-500'}`}>
-                         {product.sizes && product.sizes.length > 0 ? `a partir de R$ ${Math.min(...product.sizes.map(s => s.price)).toFixed(2).replace('.', ',')}` : `R$ ${product.price.toFixed(2).replace('.', ',')}`}
-                      </span>
-                      {available && <div className="bg-amber-50 text-amber-600 p-1.5 rounded-lg"><Plus size={16} /></div>}
+                  <div key={product.id} className={`bg-white rounded-3xl p-3 shadow-sm transition-shadow border flex gap-4 overflow-hidden items-center relative ${available ? 'hover:shadow-md cursor-pointer' : 'opacity-60 grayscale cursor-not-allowed'}`} onClick={() => available && openProductCustomization(product)}>
+                    {!available && (
+                      <div className="absolute top-2 left-2 bg-neutral-800 text-white text-[10px] font-black px-2 py-1 rounded-md tracking-wider z-10 shadow-sm">ESGOTADO</div>
+                    )}
+                    <div className="relative h-24 w-24 shrink-0 bg-neutral-100 rounded-2xl overflow-hidden">
+                      <Image src={product.image} alt={product.name} fill className="object-cover" referrerPolicy="no-referrer" />
+                    </div>
+                    <div className="flex flex-col flex-1 py-1 pr-2">
+                      <h3 className="font-bold text-sm leading-tight mb-1">{product.name}</h3>
+                      <p className="text-neutral-500 text-xs mb-2 line-clamp-2">{product.description}</p>
+                      <div className="flex justify-between items-center mt-auto">
+                        <span className={`font-extrabold text-sm ${available ? 'text-neutral-900' : 'text-neutral-500'}`}>
+                          {product.sizes && product.sizes.length > 0 ? `a partir de R$ ${Math.min(...product.sizes.map(s => s.price)).toFixed(2).replace('.', ',')}` : `R$ ${product.price.toFixed(2).replace('.', ',')}`}
+                        </span>
+                        {available && <div className="bg-amber-50 text-amber-600 p-1.5 rounded-lg"><Plus size={16} /></div>}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )})}
+                )
+              })}
             </section>
           </div>
         )}
@@ -478,41 +477,41 @@ export default function Home() {
         {/* ABA: CARRINHO */}
         {activeTab === 'cart' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><ShoppingCart className="text-amber-500"/> Meu Carrinho</h2>
-            
+            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><ShoppingCart className="text-amber-500" /> Meu Carrinho</h2>
+
             <div className="space-y-4 mb-8">
-               {cartItems.map(item => (
-                 <div key={item.cartItemId} className="bg-white p-4 rounded-3xl shadow-sm border flex gap-4 items-center">
-                   <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-neutral-100 flex-shrink-0">
-                     <Image src={item.product.image} alt={item.product.name} fill className="object-cover" referrerPolicy="no-referrer" />
-                   </div>
-                   <div className="flex-1">
-                     <div className="flex justify-between items-start mb-1">
-                       <p className="font-bold text-sm leading-tight pr-2">{item.product.name}</p>
-                       <button onClick={() => removeFromCart(item.cartItemId)} className="text-neutral-400 hover:text-amber-500 bg-neutral-50 rounded-full p-1">
-                         <X size={14} />
-                       </button>
-                     </div>
-                     {item.selectedSize && <p className="text-xs text-neutral-500 mb-0.5">Tamanho: {item.selectedSize.name}</p>}
-                     {item.selectedExtras.length > 0 && <p className="text-xs text-neutral-500 mb-2">Com: {item.selectedExtras.map(e => e.name).join(', ')}</p>}
-                     <div className="flex justify-between items-center mt-2">
-                       <p className="font-bold text-amber-500 text-base">R$ {(((item.selectedSize ? item.selectedSize.price : item.product.price) + item.selectedExtras.reduce((s,e)=>s+e.price,0))*item.quantity).toFixed(2).replace('.', ',')}</p>
-                       <div className="flex items-center gap-3">
-                         <button onClick={() => updateQuantity(item.cartItemId, -1)} className="w-7 h-7 flex items-center justify-center rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200"><Minus size={14}/></button>
-                         <span className="font-bold text-sm w-4 text-center">{item.quantity}</span>
-                         <button onClick={() => updateQuantity(item.cartItemId, 1)} className="w-7 h-7 flex items-center justify-center rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200"><Plus size={14}/></button>
-                       </div>
-                     </div>
-                   </div>
-                 </div>
-               ))}
-               {cartItems.length === 0 && (
-                 <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-neutral-300">
-                   <div className="w-16 h-16 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-4 text-neutral-300"><ShoppingCart size={24}/></div>
-                   <p className="text-neutral-500 font-medium">Seu carrinho está vazio!</p>
-                   <button onClick={() => setActiveTab('menu')} className="text-amber-500 font-bold mt-2 text-sm">Adicionar itens</button>
-                 </div>
-               )}
+              {cartItems.map(item => (
+                <div key={item.cartItemId} className="bg-white p-4 rounded-3xl shadow-sm border flex gap-4 items-center">
+                  <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-neutral-100 flex-shrink-0">
+                    <Image src={item.product.image} alt={item.product.name} fill className="object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-start mb-1">
+                      <p className="font-bold text-sm leading-tight pr-2">{item.product.name}</p>
+                      <button onClick={() => removeFromCart(item.cartItemId)} className="text-neutral-400 hover:text-amber-500 bg-neutral-50 rounded-full p-1">
+                        <X size={14} />
+                      </button>
+                    </div>
+                    {item.selectedSize && <p className="text-xs text-neutral-500 mb-0.5">Tamanho: {item.selectedSize.name}</p>}
+                    {item.selectedExtras.length > 0 && <p className="text-xs text-neutral-500 mb-2">Com: {item.selectedExtras.map(e => e.name).join(', ')}</p>}
+                    <div className="flex justify-between items-center mt-2">
+                      <p className="font-bold text-amber-500 text-base">R$ {(((item.selectedSize ? item.selectedSize.price : item.product.price) + item.selectedExtras.reduce((s, e) => s + e.price, 0)) * item.quantity).toFixed(2).replace('.', ',')}</p>
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => updateQuantity(item.cartItemId, -1)} className="w-7 h-7 flex items-center justify-center rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200"><Minus size={14} /></button>
+                        <span className="font-bold text-sm w-4 text-center">{item.quantity}</span>
+                        <button onClick={() => updateQuantity(item.cartItemId, 1)} className="w-7 h-7 flex items-center justify-center rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200"><Plus size={14} /></button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {cartItems.length === 0 && (
+                <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-neutral-300">
+                  <div className="w-16 h-16 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-4 text-neutral-300"><ShoppingCart size={24} /></div>
+                  <p className="text-neutral-500 font-medium">Seu carrinho está vazio!</p>
+                  <button onClick={() => setActiveTab('menu')} className="text-amber-500 font-bold mt-2 text-sm">Adicionar itens</button>
+                </div>
+              )}
             </div>
 
             {cartItems.length > 0 && (
@@ -520,8 +519,8 @@ export default function Home() {
                 <div className="mb-6 space-y-4">
                   <div>
                     <label className="block text-sm font-bold text-neutral-700 mb-1">Seu Nome *</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={customerName}
                       onChange={e => setCustomerName(e.target.value)}
                       placeholder="Como vamos te chamar?"
@@ -530,8 +529,8 @@ export default function Home() {
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-neutral-700 mb-1">WhatsApp (Opcional)</label>
-                    <input 
-                      type="tel" 
+                    <input
+                      type="tel"
                       value={customerPhone}
                       onChange={e => setCustomerPhone(e.target.value)}
                       placeholder="(DD) 99999-9999"
@@ -544,13 +543,13 @@ export default function Home() {
                   <div>
                     <label className="block text-sm font-bold text-neutral-700 mb-2">Como vai receber?</label>
                     <div className="grid grid-cols-2 gap-3">
-                      <button 
+                      <button
                         onClick={() => setDeliveryType('BALCAO')}
                         className={`py-3 rounded-xl font-bold border-2 transition-colors ${deliveryType === 'BALCAO' ? 'bg-amber-50 text-amber-600 border-amber-500' : 'bg-white text-neutral-500 border-neutral-200 hover:border-amber-300'}`}
                       >
                         No Balcão
                       </button>
-                      <button 
+                      <button
                         onClick={() => setDeliveryType('MESA')}
                         className={`py-3 rounded-xl font-bold border-2 transition-colors ${deliveryType === 'MESA' ? 'bg-amber-50 text-amber-600 border-amber-500' : 'bg-white text-neutral-500 border-neutral-200 hover:border-amber-300'}`}
                       >
@@ -558,24 +557,23 @@ export default function Home() {
                       </button>
                     </div>
                   </div>
-                  
+
                   {deliveryType === 'MESA' && (
                     <div className="animate-in slide-in-from-top-2">
-                       <label className="block text-sm font-bold text-neutral-700 mb-1">
-                         Número da Mesa * {isTableFromUrl && <span className="text-amber-600 font-bold text-xs ml-1 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 animate-pulse">Mesa {tableNumber} via QR Code</span>}
-                       </label>
-                       <input 
-                         type="text" 
-                         value={tableNumber}
-                         onChange={e => setTableNumber(e.target.value)}
-                         disabled={isTableFromUrl}
-                         placeholder="Ex: 12"
-                         className={`w-full border rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 ${
-                           isTableFromUrl 
-                             ? 'bg-neutral-100 border-neutral-200 text-neutral-500 cursor-not-allowed font-semibold' 
-                             : 'bg-amber-50/50 border-neutral-300'
-                         }`}
-                       />
+                      <label className="block text-sm font-bold text-neutral-700 mb-1">
+                        Número da Mesa * {isTableFromUrl && <span className="text-amber-600 font-bold text-xs ml-1 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 animate-pulse">Mesa {tableNumber} via QR Code</span>}
+                      </label>
+                      <input
+                        type="text"
+                        value={tableNumber}
+                        onChange={e => setTableNumber(e.target.value)}
+                        disabled={isTableFromUrl}
+                        placeholder="Ex: 12"
+                        className={`w-full border rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 ${isTableFromUrl
+                            ? 'bg-neutral-100 border-neutral-200 text-neutral-500 cursor-not-allowed font-semibold'
+                            : 'bg-amber-50/50 border-neutral-300'
+                          }`}
+                      />
                     </div>
                   )}
 
@@ -583,7 +581,7 @@ export default function Home() {
                     <label className="block text-sm font-bold text-neutral-700 mb-2">Forma de Pagamento</label>
                     <div className="grid grid-cols-3 gap-3">
                       {(['PIX', 'CARTAO', 'DINHEIRO'] as const).map(pm => (
-                        <button 
+                        <button
                           key={pm}
                           onClick={() => setPaymentMethod(pm)}
                           className={`py-3 rounded-xl font-bold border-2 transition-colors text-sm ${paymentMethod === pm ? 'bg-green-50 text-green-700 border-green-500' : 'bg-white text-neutral-500 border-neutral-200 hover:border-green-300'}`}
@@ -599,8 +597,8 @@ export default function Home() {
                   <span className="text-neutral-500 font-medium pt-1">Total do pedido</span>
                   <span className="text-2xl font-black text-neutral-900">R$ {cartTotal.toFixed(2).replace('.', ',')}</span>
                 </div>
-                <button 
-                  onClick={handleAppCheckout} 
+                <button
+                  onClick={handleAppCheckout}
                   disabled={!customerName.trim() || !storeOpen || (deliveryType === 'MESA' && !tableNumber.trim())}
                   className="w-full bg-amber-500 disabled:bg-neutral-300 disabled:cursor-not-allowed disabled:shadow-none text-white hover:bg-amber-600 font-bold py-4 rounded-2xl transition-colors shadow-lg shadow-amber-500/25"
                 >
@@ -614,26 +612,26 @@ export default function Home() {
         {/* ABA: HISTÓRICO DE PEDIDOS */}
         {activeTab === 'orders' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-             <div className="flex items-center justify-between mb-6">
-               <h2 className="text-2xl font-bold flex items-center gap-2">
-                 <ClipboardList className="text-amber-500"/> Seus Pedidos
-               </h2>
-               {myOrders.length > 0 && (
-                 <button
-                   onClick={handleClearHistory}
-                   title="Limpar histórico"
-                   className="flex items-center gap-1.5 text-xs font-bold text-neutral-400 hover:text-red-500 bg-neutral-100 hover:bg-red-50 border border-neutral-200 hover:border-red-200 px-3 py-1.5 rounded-full transition-all duration-200"
-                 >
-                   <Trash2 size={13} />
-                   Limpar Histórico
-                 </button>
-               )}
-             </div>
-             <div className="space-y-4">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <ClipboardList className="text-amber-500" /> Seus Pedidos
+              </h2>
+              {myOrders.length > 0 && (
+                <button
+                  onClick={handleClearHistory}
+                  title="Limpar histórico"
+                  className="flex items-center gap-1.5 text-xs font-bold text-neutral-400 hover:text-red-500 bg-neutral-100 hover:bg-red-50 border border-neutral-200 hover:border-red-200 px-3 py-1.5 rounded-full transition-all duration-200"
+                >
+                  <Trash2 size={13} />
+                  Limpar Histórico
+                </button>
+              )}
+            </div>
+            <div className="space-y-4">
               {myOrders.length === 0 ? (
                 <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-neutral-300">
-                   <div className="w-16 h-16 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-4 text-neutral-300"><ClipboardList size={24}/></div>
-                   <p className="text-neutral-500 font-medium">Você ainda não fez pedidos.</p>
+                  <div className="w-16 h-16 bg-neutral-50 rounded-full flex items-center justify-center mx-auto mb-4 text-neutral-300"><ClipboardList size={24} /></div>
+                  <p className="text-neutral-500 font-medium">Você ainda não fez pedidos.</p>
                 </div>
               ) : myOrders.map(order => (
                 <div key={order.orderNumber} className="bg-white rounded-3xl p-5 shadow-sm border border-neutral-200/60">
@@ -642,17 +640,16 @@ export default function Home() {
                       <span className="text-xs text-neutral-400 font-medium block">Nº DO PEDIDO</span>
                       <span className="font-black text-lg text-neutral-900">#{order.orderNumber}</span>
                     </div>
-                    <span 
-                      className={`text-xs px-3 py-1.5 rounded-full font-bold transition-colors ${
-                        order.status === 'PREPARANDO' ? 'bg-amber-100 text-amber-600' :
-                        order.status === 'PRONTO' ? 'bg-green-100 text-green-600' :
-                        'bg-neutral-100 text-neutral-500'
-                      }`}
+                    <span
+                      className={`text-xs px-3 py-1.5 rounded-full font-bold transition-colors ${order.status === 'PREPARANDO' ? 'bg-amber-100 text-amber-600' :
+                          order.status === 'PRONTO' ? 'bg-green-100 text-green-600' :
+                            'bg-neutral-100 text-neutral-500'
+                        }`}
                     >
                       {order.status}
                     </span>
                   </div>
-                  
+
                   <div className="space-y-3 mb-4">
                     {order.items.map(item => (
                       <div key={item.cartItemId} className="flex justify-between text-sm">
@@ -666,7 +663,7 @@ export default function Home() {
                       </div>
                     ))}
                   </div>
-                  
+
                   <div className="flex justify-between items-center pt-4 border-t border-neutral-100">
                     <span className="text-neutral-500 text-sm">Total pago</span>
                     <span className="font-bold text-amber-500 text-lg">R$ {order.total.toFixed(2).replace('.', ',')}</span>
@@ -681,45 +678,45 @@ export default function Home() {
 
       {/* FLOAT BOTTOM NAVIGATION */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[90%] max-w-sm">
-         <div className="bg-neutral-900 shadow-2xl rounded-full p-2 flex justify-between items-center border border-white/10 backdrop-blur-md">
-            
-            <button 
-              onClick={() => setActiveTab('menu')}
-              className={`flex-1 flex flex-col items-center justify-center p-2.5 rounded-full transition-all duration-300 ${activeTab === 'menu' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white hover:bg-white/5'}`}
-            >
-               <HomeIcon size={20} className={activeTab === 'menu' ? 'mb-0.5' : ''}/>
-               {activeTab === 'menu' && <span className="text-[10px] font-bold">Cardápio</span>}
-            </button>
-            
-            <button 
-              onClick={() => setActiveTab('cart')}
-              className={`flex-1 flex flex-col items-center justify-center p-2.5 rounded-full transition-all duration-300 relative ${activeTab === 'cart' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white hover:bg-white/5'}`}
-            >
-               <div className="relative">
-                 <ShoppingCart size={20} className={activeTab === 'cart' ? 'mb-0.5' : ''}/>
-                 {cartCount > 0 && activeTab !== 'cart' && (
-                   <span className="absolute -top-1.5 -right-2 bg-amber-500 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full border-2 border-neutral-900">
-                     {cartCount}
-                   </span>
-                 )}
-               </div>
-               {activeTab === 'cart' && <span className="text-[10px] font-bold">Carrinho</span>}
-            </button>
-            
-            <button 
-              onClick={() => setActiveTab('orders')}
-              className={`flex-1 flex flex-col items-center justify-center p-2.5 rounded-full transition-all duration-300 relative ${activeTab === 'orders' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white hover:bg-white/5'}`}
-            >
-               <div className="relative">
-                  <ClipboardList size={20} className={activeTab === 'orders' ? 'mb-0.5' : ''}/>
-                  {myOrders.filter(o => o.status !== 'ENTREGUE').length > 0 && activeTab !== 'orders' && (
-                    <span className="absolute -top-1 -right-1 bg-amber-500 w-2.5 h-2.5 rounded-full border-2 border-neutral-900"></span>
-                  )}
-               </div>
-               {activeTab === 'orders' && <span className="text-[10px] font-bold">Pedidos</span>}
-            </button>
-            
-         </div>
+        <div className="bg-neutral-900 shadow-2xl rounded-full p-2 flex justify-between items-center border border-white/10 backdrop-blur-md">
+
+          <button
+            onClick={() => setActiveTab('menu')}
+            className={`flex-1 flex flex-col items-center justify-center p-2.5 rounded-full transition-all duration-300 ${activeTab === 'menu' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white hover:bg-white/5'}`}
+          >
+            <HomeIcon size={20} className={activeTab === 'menu' ? 'mb-0.5' : ''} />
+            {activeTab === 'menu' && <span className="text-[10px] font-bold">Cardápio</span>}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('cart')}
+            className={`flex-1 flex flex-col items-center justify-center p-2.5 rounded-full transition-all duration-300 relative ${activeTab === 'cart' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white hover:bg-white/5'}`}
+          >
+            <div className="relative">
+              <ShoppingCart size={20} className={activeTab === 'cart' ? 'mb-0.5' : ''} />
+              {cartCount > 0 && activeTab !== 'cart' && (
+                <span className="absolute -top-1.5 -right-2 bg-amber-500 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full border-2 border-neutral-900">
+                  {cartCount}
+                </span>
+              )}
+            </div>
+            {activeTab === 'cart' && <span className="text-[10px] font-bold">Carrinho</span>}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('orders')}
+            className={`flex-1 flex flex-col items-center justify-center p-2.5 rounded-full transition-all duration-300 relative ${activeTab === 'orders' ? 'bg-amber-500 text-white' : 'text-neutral-400 hover:text-white hover:bg-white/5'}`}
+          >
+            <div className="relative">
+              <ClipboardList size={20} className={activeTab === 'orders' ? 'mb-0.5' : ''} />
+              {myOrders.filter(o => o.status !== 'ENTREGUE').length > 0 && activeTab !== 'orders' && (
+                <span className="absolute -top-1 -right-1 bg-amber-500 w-2.5 h-2.5 rounded-full border-2 border-neutral-900"></span>
+              )}
+            </div>
+            {activeTab === 'orders' && <span className="text-[10px] font-bold">Pedidos</span>}
+          </button>
+
+        </div>
       </div>
 
       {/* MODAL ADICIONAIS DE PRODUTO */}
@@ -732,74 +729,74 @@ export default function Home() {
               <div className="relative h-48 w-full bg-neutral-100 shrink-0 overflow-hidden">
                 <Image src={selectedProduct.image} alt={selectedProduct.name} fill className="object-cover" referrerPolicy="no-referrer" />
               </div>
-              
+
               <div className="p-6">
                 <h2 className="text-xl font-bold mb-1 leading-tight">{selectedProduct.name}</h2>
                 <p className="text-neutral-500 text-sm mb-6">{selectedProduct.description}</p>
-              
-              {selectedProduct.sizes && selectedProduct.sizes.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="font-extrabold text-neutral-900 mb-3 text-sm uppercase tracking-wider">Escolha o Tamanho</h3>
-                  <div className="space-y-2.5">
-                    {selectedProduct.sizes.map(size => {
-                      const isSelected = tempSize?.id === size.id;
-                      return (
-                        <div key={size.id} onClick={() => setTempSize(size)} className={`flex items-center justify-between p-3.5 border-2 rounded-2xl cursor-pointer transition-all ${isSelected ? 'border-amber-500 bg-amber-50/50 shadow-sm' : 'border-neutral-100 hover:border-neutral-200 bg-white'}`}>
-                          <div className="flex items-center gap-3">
-                            <div className={`w-5 h-5 rounded-full flex items-center justify-center border-2 transition-colors ${isSelected ? 'border-amber-500' : 'border-neutral-300'}`}>
-                              {isSelected && <div className="w-2.5 h-2.5 bg-amber-500 rounded-full" />}
-                            </div>
-                            <span className="font-medium text-neutral-700">{size.name}</span>
-                          </div>
-                          <span className={`font-bold ${isSelected ? 'text-amber-600' : 'text-neutral-500'}`}>R$ {size.price.toFixed(2).replace('.', ',')}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
 
-              {selectedProduct.extras && (
-                <div className="mb-6">
-                  <h3 className="font-extrabold text-neutral-900 mb-3 text-sm uppercase tracking-wider">Turbine seu pedido</h3>
-                  <div className="space-y-2.5">
-                    {selectedProduct.extras.map(ex => {
-                      const isSelected = tempExtras.some(e => e.id === ex.id);
-                      return (
-                        <div key={ex.id} onClick={() => toggleTempExtra(ex)} className={`flex items-center justify-between p-3.5 border-2 rounded-2xl cursor-pointer transition-all ${isSelected ? 'border-amber-500 bg-amber-50/50 shadow-sm' : 'border-neutral-100 hover:border-neutral-200 bg-white'}`}>
-                          <div className="flex items-center gap-3">
-                            <div className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-colors ${isSelected ? 'bg-amber-500 border-amber-500' : 'border-neutral-300'}`}>
-                              {isSelected && <X size={12} className="text-white" style={{ transform: 'rotate(45deg)' }} />}
+                {selectedProduct.sizes && selectedProduct.sizes.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="font-extrabold text-neutral-900 mb-3 text-sm uppercase tracking-wider">Escolha o Tamanho</h3>
+                    <div className="space-y-2.5">
+                      {selectedProduct.sizes.map(size => {
+                        const isSelected = tempSize?.id === size.id;
+                        return (
+                          <div key={size.id} onClick={() => setTempSize(size)} className={`flex items-center justify-between p-3.5 border-2 rounded-2xl cursor-pointer transition-all ${isSelected ? 'border-amber-500 bg-amber-50/50 shadow-sm' : 'border-neutral-100 hover:border-neutral-200 bg-white'}`}>
+                            <div className="flex items-center gap-3">
+                              <div className={`w-5 h-5 rounded-full flex items-center justify-center border-2 transition-colors ${isSelected ? 'border-amber-500' : 'border-neutral-300'}`}>
+                                {isSelected && <div className="w-2.5 h-2.5 bg-amber-500 rounded-full" />}
+                              </div>
+                              <span className="font-medium text-neutral-700">{size.name}</span>
                             </div>
-                            <span className="font-medium text-neutral-700">{ex.name}</span>
+                            <span className={`font-bold ${isSelected ? 'text-amber-600' : 'text-neutral-500'}`}>R$ {size.price.toFixed(2).replace('.', ',')}</span>
                           </div>
-                          <span className={`font-bold ${isSelected ? 'text-amber-600' : 'text-neutral-500'}`}>+R$ {ex.price.toFixed(2).replace('.', ',')}</span>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              <div className="flex justify-between items-center p-4 bg-neutral-50 rounded-2xl border border-neutral-100 mb-2">
-                <span className="font-bold text-neutral-700">Quantidade</span>
-                <div className="flex items-center gap-4">
-                  <button onClick={() => setTempQuantity(q => Math.max(1, q-1))} className="w-10 h-10 flex items-center justify-center border border-neutral-200 shadow-sm rounded-xl bg-white text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 transition-colors"><Minus size={16} strokeWidth={3}/></button>
-                  <span className="w-4 text-center font-black text-lg">{tempQuantity}</span>
-                  <button onClick={() => setTempQuantity(q => q+1)} className="w-10 h-10 flex items-center justify-center border border-neutral-200 shadow-sm rounded-xl bg-white text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 transition-colors"><Plus size={16} strokeWidth={3}/></button>
+                {selectedProduct.extras && (
+                  <div className="mb-6">
+                    <h3 className="font-extrabold text-neutral-900 mb-3 text-sm uppercase tracking-wider">Turbine seu pedido</h3>
+                    <div className="space-y-2.5">
+                      {selectedProduct.extras.map(ex => {
+                        const isSelected = tempExtras.some(e => e.id === ex.id);
+                        return (
+                          <div key={ex.id} onClick={() => toggleTempExtra(ex)} className={`flex items-center justify-between p-3.5 border-2 rounded-2xl cursor-pointer transition-all ${isSelected ? 'border-amber-500 bg-amber-50/50 shadow-sm' : 'border-neutral-100 hover:border-neutral-200 bg-white'}`}>
+                            <div className="flex items-center gap-3">
+                              <div className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-colors ${isSelected ? 'bg-amber-500 border-amber-500' : 'border-neutral-300'}`}>
+                                {isSelected && <X size={12} className="text-white" style={{ transform: 'rotate(45deg)' }} />}
+                              </div>
+                              <span className="font-medium text-neutral-700">{ex.name}</span>
+                            </div>
+                            <span className={`font-bold ${isSelected ? 'text-amber-600' : 'text-neutral-500'}`}>+R$ {ex.price.toFixed(2).replace('.', ',')}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center p-4 bg-neutral-50 rounded-2xl border border-neutral-100 mb-2">
+                  <span className="font-bold text-neutral-700">Quantidade</span>
+                  <div className="flex items-center gap-4">
+                    <button onClick={() => setTempQuantity(q => Math.max(1, q - 1))} className="w-10 h-10 flex items-center justify-center border border-neutral-200 shadow-sm rounded-xl bg-white text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 transition-colors"><Minus size={16} strokeWidth={3} /></button>
+                    <span className="w-4 text-center font-black text-lg">{tempQuantity}</span>
+                    <button onClick={() => setTempQuantity(q => q + 1)} className="w-10 h-10 flex items-center justify-center border border-neutral-200 shadow-sm rounded-xl bg-white text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 transition-colors"><Plus size={16} strokeWidth={3} /></button>
+                  </div>
                 </div>
               </div>
             </div>
-            </div>
-            
+
             <div className="p-4 border-t border-neutral-100 shrink-0 bg-white sm:rounded-b-3xl">
-              <button 
-                onClick={confirmAddToCart} 
+              <button
+                onClick={confirmAddToCart}
                 className="w-full bg-amber-500 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl shadow-lg shadow-amber-500/25 transition-colors flex items-center justify-between px-6"
                 disabled={!storeOpen}
               >
                 <span>{!storeOpen ? 'Fechado' : 'Adicionar'}</span>
-                <span>R$ {(((tempSize ? tempSize.price : selectedProduct.price) + tempExtras.reduce((s,e)=>s+e.price,0))*tempQuantity).toFixed(2).replace('.', ',')}</span>
+                <span>R$ {(((tempSize ? tempSize.price : selectedProduct.price) + tempExtras.reduce((s, e) => s + e.price, 0)) * tempQuantity).toFixed(2).replace('.', ',')}</span>
               </button>
             </div>
           </div>
@@ -809,28 +806,28 @@ export default function Home() {
       {/* SUCCESS MODAL (GERAÇÃO DE SENHA) */}
       {orderSuccessMsg && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-           <div className="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm" onClick={() => setOrderSuccessMsg(null)} />
-           <div className="relative bg-white p-8 rounded-[2rem] text-center z-10 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-300">
-              <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-5 text-amber-500 relative">
-                 <ClipboardList size={32} />
-                 <div className="absolute top-0 right-0 w-6 h-6 bg-green-500 rounded-full border-4 border-white flex items-center justify-center">
-                    <span className="text-white text-xs" style={{transform: 'rotate(45deg)'}}>+</span>
-                 </div>
+          <div className="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm" onClick={() => setOrderSuccessMsg(null)} />
+          <div className="relative bg-white p-8 rounded-[2rem] text-center z-10 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-5 text-amber-500 relative">
+              <ClipboardList size={32} />
+              <div className="absolute top-0 right-0 w-6 h-6 bg-green-500 rounded-full border-4 border-white flex items-center justify-center">
+                <span className="text-white text-xs" style={{ transform: 'rotate(45deg)' }}>+</span>
               </div>
-              <h2 className="text-2xl font-extrabold mb-2 text-neutral-900">Pedido na Cozinha!</h2>
-              <p className="mb-6 text-neutral-500">Sua senha de retirada é:</p>
-              
-              <div className="bg-neutral-50 border-2 border-dashed border-neutral-200 rounded-3xl py-6 mb-8">
-                 <h1 className="text-5xl font-black text-amber-500 tracking-wider">#{orderSuccessMsg.orderNumber}</h1>
-              </div>
-              
-              <button 
-                onClick={() => setOrderSuccessMsg(null)} 
-                className="w-full bg-neutral-900 hover:bg-black text-white py-4 rounded-2xl font-bold transition-colors"
-              >
-                Acompanhar Pedido
-              </button>
-           </div>
+            </div>
+            <h2 className="text-2xl font-extrabold mb-2 text-neutral-900">Pedido na Cozinha!</h2>
+            <p className="mb-6 text-neutral-500">Sua senha de retirada é:</p>
+
+            <div className="bg-neutral-50 border-2 border-dashed border-neutral-200 rounded-3xl py-6 mb-8">
+              <h1 className="text-5xl font-black text-amber-500 tracking-wider">#{orderSuccessMsg.orderNumber}</h1>
+            </div>
+
+            <button
+              onClick={() => setOrderSuccessMsg(null)}
+              className="w-full bg-neutral-900 hover:bg-black text-white py-4 rounded-2xl font-bold transition-colors"
+            >
+              Acompanhar Pedido
+            </button>
+          </div>
         </div>
       )}
     </div>
