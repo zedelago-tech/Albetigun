@@ -478,7 +478,7 @@ export default function Home() {
         {/* ABA: CARRINHO */}
         {activeTab === 'cart' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><ShoppingCart className="text-amber-500"/> Seu Carrinho</h2>
+            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><ShoppingCart className="text-amber-500"/> Meu Carrinho</h2>
             
             <div className="space-y-4 mb-8">
                {cartItems.map(item => (
