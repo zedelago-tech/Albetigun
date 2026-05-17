@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ChefHat, CheckCircle, Clock, Package, Check, Trash2 } from 'lucide-react';
+import { ChefHat, CheckCircle, Clock, Package, Check, Trash2, History, X } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 type Size = {
   id: string;
@@ -33,7 +34,7 @@ type Order = {
   orderNumber: string;
   items: CartItem[];
   total: number;
-  status: 'PREPARANDO' | 'PRONTO' | 'ENTREGUE';
+  status: 'NOVO' | 'PREPARANDO' | 'PRONTO' | 'ENTREGUE';
   createdAt: string;
   id: string; // unique internal id
   customerName: string;
@@ -44,45 +45,82 @@ type Order = {
 };
 
 export default function CozinhaPanel() {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return sessionStorage.getItem('sorvefood_cozinha_auth') === 'true';
-    }
-    return false;
-  });
+  // isMounted garante que o sessionStorage só é lido no cliente,
+  // evitando o erro de hidratação causado por diferença servidor/cliente.
+  const [isMounted, setIsMounted] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   
-  const [orders, setOrders] = useState<Order[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sorvefood_orders');
-      if (saved) {
-        try { return JSON.parse(saved); } catch { return []; }
-      }
-    }
-    return [];
-  });
+  const [orders, setOrders] = useState<Order[]>([]);
   const [soundEnabled, setSoundEnabled] = useState(false);
+  const [soundType, setSoundType] = useState<'suave' | 'retro' | 'classic' | 'bell'>('suave');
   const isInitialLoad = React.useRef(true);
   const prevOrderIds = React.useRef<string[]>([]);
 
-  const playChime = () => {
+  // IDs arquivados visualmente (persistem no localStorage, nunca deletam do Supabase)
+  const [archivedIds, setArchivedIds] = useState<string[]>([]);
+  // Modal do histórico completo
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  // Executado apenas no cliente após a hidratação
+  useEffect(() => {
+    setIsMounted(true);
+    setIsAuthenticated(
+      localStorage.getItem('sorvefood_cozinha_auth') === 'true' ||
+      sessionStorage.getItem('sorvefood_cozinha_auth') === 'true'
+    );
+    // Carrega IDs arquivados e som padrão do localStorage
     try {
+      const saved = localStorage.getItem('arquivados_cozinha');
+      if (saved) setArchivedIds(JSON.parse(saved));
+    } catch {}
+    try {
+      const savedSound = localStorage.getItem('sorvefood_cozinha_sound');
+      if (savedSound) setSoundType(savedSound as any);
+    } catch {}
+  }, []);
+
+  const playChime = (typeOverride?: 'suave' | 'retro' | 'classic' | 'bell') => {
+    try {
+      const activeType = typeOverride || soundType;
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const playTone = (freq: number, time: number, dur: number) => {
+      
+      const playTone = (freq: number, time: number, dur: number, wave: 'sine' | 'triangle' | 'sawtooth' | 'square' = 'sine', vol = 0.3) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain);
         gain.connect(ctx.destination);
-        osc.type = 'sine';
+        osc.type = wave;
         osc.frequency.value = freq;
         gain.gain.setValueAtTime(0, time);
-        gain.gain.linearRampToValueAtTime(0.5, time + 0.05);
+        gain.gain.linearRampToValueAtTime(vol, time + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.001, time + dur);
-         osc.start(time);
-         osc.stop(time + dur);
+        osc.start(time);
+        osc.stop(time + dur);
       };
-      playTone(523.25, ctx.currentTime, 0.5); // C5
-      playTone(659.25, ctx.currentTime + 0.15, 0.5); // E5
+
+      const now = ctx.currentTime;
+
+      if (activeType === 'suave') {
+        playTone(523.25, now, 0.6, 'sine', 0.4); // C5
+        playTone(659.25, now + 0.1, 0.6, 'sine', 0.4); // E5
+        playTone(783.99, now + 0.2, 0.8, 'sine', 0.4); // G5
+      } else if (activeType === 'retro') {
+        playTone(300, now, 0.1, 'triangle', 0.3);
+        playTone(600, now + 0.05, 0.1, 'triangle', 0.3);
+        playTone(900, now + 0.1, 0.1, 'triangle', 0.3);
+        playTone(1200, now + 0.15, 0.3, 'triangle', 0.3);
+      } else if (activeType === 'classic') {
+        playTone(880, now, 0.15, 'square', 0.25);
+        playTone(880, now + 0.22, 0.15, 'square', 0.25);
+      } else if (activeType === 'bell') {
+        // Metallic FM bell chime
+        playTone(1000, now, 1.2, 'sine', 0.4);
+        playTone(1500, now, 1.0, 'sine', 0.2);
+        playTone(2200, now, 0.8, 'sine', 0.1);
+      }
     } catch(e) {}
   };
 
@@ -94,73 +132,141 @@ export default function CozinhaPanel() {
         return;
     }
 
-    const hasNewOrder = currentIds.some(id => !prevOrderIds.current.includes(id));
-    if (hasNewOrder && soundEnabled) {
+    // Dispara o BIP apenas para pedidos novos com status 'NOVO'
+    const hasNewNovoOrder = orders.some(
+      o => o.status === 'NOVO' && !prevOrderIds.current.includes(o.id)
+    );
+    if (hasNewNovoOrder && soundEnabled) {
         playChime();
     }
     prevOrderIds.current = currentIds;
   }, [orders, soundEnabled]);
 
-  // Load from LocalStorage to sync with the customer app
   useEffect(() => {
-    const loadOrders = () => {
-      const saved = localStorage.getItem('sorvefood_orders');
-      if (saved) {
-        try {
-          setOrders(JSON.parse(saved));
-        } catch (e) {
-          console.error("Failed to parse orders");
-        }
-      }
-    };
+    async function fetchOrders() {
+      if (!isAuthenticated) return;
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            quantity,
+            unit_price,
+            obs,
+            products ( name ),
+            product_sizes ( name ),
+            order_item_extras ( product_extras ( name ) )
+          )
+        `)
+        // Pedidos mais antigos primeiro (fila FIFO da cozinha)
+        .order('created_at', { ascending: true });
 
-    // Listen to changes from other tabs (customer placing an order)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'sorvefood_orders') {
-        loadOrders();
+      if (data && !error) {
+         const mappedOrders: Order[] = data.map((o: any) => ({
+            id: o.id,
+            orderNumber: o.id.split('-').pop() || o.id,
+            status: o.status,
+            customerName: o.customer_name,
+            customerPhone: o.customer_phone,
+            paymentMethod: o.payment_method,
+            deliveryType: o.delivery_type,
+            tableNumber: o.table_number,
+            total: Number(o.total_amount),
+            createdAt: new Date(o.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+            items: (o.order_items || []).map((item: any, idx: number) => ({
+               cartItemId: 'item_' + idx,
+               quantity: item.quantity,
+               product: { name: item.products?.name ?? 'Item', category: '' },
+               selectedSize: item.product_sizes ? { name: item.product_sizes.name } : undefined,
+               selectedExtras: (item.order_item_extras || []).map((ex: any) => ({ name: ex.product_extras?.name ?? '' }))
+            }))
+         }));
+         setOrders(mappedOrders);
+      } else if (error) {
+         console.error('Erro ao buscar pedidos:', JSON.stringify(error));
       }
-    };
+    }
 
-    window.addEventListener('storage', handleStorageChange);
+    if (isAuthenticated) {
+       fetchOrders();
+       const interval = setInterval(fetchOrders, 3000);
+       return () => clearInterval(interval);
+    }
+  }, [isAuthenticated]);
+
+  const updateOrderStatus = async (orderId: string, newStatus: 'PREPARANDO' | 'PRONTO' | 'ENTREGUE') => {
+    // Update locally instantly for UX
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
     
-    // Fallback polling just in case we are in the same window (e.g. iframe issues)
-    const interval = setInterval(loadOrders, 2000);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
-    };
-  }, []);
-
-  const updateOrderStatus = (orderId: string, newStatus: 'PREPARANDO' | 'PRONTO' | 'ENTREGUE') => {
-    setOrders(prev => {
-      const updated = prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o);
-      localStorage.setItem('sorvefood_orders', JSON.stringify(updated));
-      return updated;
-    });
+    // Update remote
+    const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
+    if (error) {
+       console.error("Erro ao atualizar status", error);
+       alert("Erro de conexão ao atualizar o status do pedido.");
+    }
   };
 
-  const clearDelivered = () => {
-    setOrders(prev => {
-      const filtered = prev.filter(o => o.status !== 'ENTREGUE');
-      localStorage.setItem('sorvefood_orders', JSON.stringify(filtered));
-      return filtered;
-    });
+  // Arquiva visualmente os entregues (salva IDs no localStorage, não deleta do Supabase)
+  const archiveDelivered = () => {
+    const visibleDeliveredIds = orders
+      .filter(o => o.status === 'ENTREGUE' && !archivedIds.includes(o.id))
+      .map(o => o.id);
+    if (visibleDeliveredIds.length === 0) return;
+    const newArchived = [...archivedIds, ...visibleDeliveredIds];
+    setArchivedIds(newArchived);
+    localStorage.setItem('arquivados_cozinha', JSON.stringify(newArchived));
   };
 
-  const preparingOrders = orders.filter(o => o.status === 'PREPARANDO');
+  // Busca todo o histórico de ENTREGUE direto do Supabase (ignora filtro local)
+  const fetchHistory = async () => {
+    setIsLoadingHistory(true);
+    setShowHistory(true);
+    const { data, error } = await supabase
+      .from('orders')
+      .select('id, customer_name, total_amount, created_at, order_items(quantity, products(name))')
+      .eq('status', 'ENTREGUE')
+      .order('created_at', { ascending: false });
+    if (data && !error) {
+      setHistoryOrders(data.map((o: any) => ({
+        id: o.id,
+        orderNumber: o.id.split('-').pop() || o.id,
+        status: 'ENTREGUE' as const,
+        customerName: o.customer_name,
+        total: Number(o.total_amount),
+        createdAt: new Date(o.created_at).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }),
+        items: (o.order_items || []).map((item: any, idx: number) => ({
+          cartItemId: 'h_' + idx,
+          quantity: item.quantity,
+          product: { name: item.products?.name ?? 'Item', category: '' },
+          selectedExtras: [],
+        })),
+        paymentMethod: '',
+        deliveryType: '',
+      })));
+    }
+    setIsLoadingHistory(false);
+  };
+
+  // 'NOVO' e 'PREPARANDO' aparecem juntos na fila da cozinha
+  const preparingOrders = orders.filter(o => o.status === 'NOVO' || o.status === 'PREPARANDO');
   const readyOrders = orders.filter(o => o.status === 'PRONTO');
-  const deliveredOrders = orders.filter(o => o.status === 'ENTREGUE');
+  // Exibe apenas entregues que ainda não foram arquivados localmente
+  const deliveredOrders = orders.filter(o => o.status === 'ENTREGUE' && !archivedIds.includes(o.id));
+  const archivedCount = orders.filter(o => o.status === 'ENTREGUE' && archivedIds.includes(o.id)).length;
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (passwordInput === 'admin123') {
+    const correctPassword = process.env.NEXT_PUBLIC_COZINHA_PASSWORD || 'admin123';
+    if (passwordInput === correctPassword) {
        setIsAuthenticated(true);
-       sessionStorage.setItem('sorvefood_cozinha_auth', 'true');
+       localStorage.setItem('sorvefood_cozinha_auth', 'true');
     } else {
-       alert('Senha incorreta (dica: admin123)');
+       alert('Senha incorreta!');
     }
   };
+
+  // Enquanto não hidratou, não renderiza nada para evitar mismatch
+  if (!isMounted) return null;
 
   if (!isAuthenticated) {
     return (
@@ -188,6 +294,7 @@ export default function CozinhaPanel() {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-neutral-100 text-neutral-900 font-sans flex flex-col">
       {/* Header */}
       <header className="bg-neutral-900 text-white shadow-md z-10 p-4 shrink-0">
@@ -200,17 +307,37 @@ export default function CozinhaPanel() {
             <a href="/admin" className="text-sm font-bold text-neutral-300 hover:text-white transition-colors underline-offset-4 hover:underline">
                Gerenciar Cardápio
             </a>
-            <div className="flex gap-4 text-sm font-medium">
-              <button 
-                onClick={() => {
-                  setSoundEnabled(!soundEnabled);
-                  if (!soundEnabled) playChime();
-                }}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${soundEnabled ? 'border-green-500 text-green-400 bg-green-500/10' : 'border-neutral-700 text-neutral-400 hover:text-neutral-300'}`}
-              >
-                  {soundEnabled ? '🔔 Som Ativado' : '🔕 Som Desativado'}
-              </button>
-              <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>Ao Vivo</div>
+            <div className="flex gap-4 text-sm font-medium items-center">
+              <div className="flex items-center gap-2">
+                {soundEnabled && (
+                  <select
+                    value={soundType}
+                    onChange={(e) => {
+                      const newType = e.target.value as any;
+                      setSoundType(newType);
+                      localStorage.setItem('sorvefood_cozinha_sound', newType);
+                      playChime(newType);
+                    }}
+                    className="bg-neutral-800 text-xs font-bold text-neutral-300 border border-neutral-700 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-amber-500 text-white"
+                  >
+                    <option value="suave">🎵 Campainha Suave</option>
+                    <option value="retro">🎮 Alerta Retrô</option>
+                    <option value="classic">🚨 Bip Duplo</option>
+                    <option value="bell">🔔 Sino de Vento</option>
+                  </select>
+                )}
+                <button 
+                  onClick={() => {
+                    const nextVal = !soundEnabled;
+                    setSoundEnabled(nextVal);
+                    if (nextVal) playChime();
+                  }}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all text-xs font-bold ${soundEnabled ? 'border-green-500 text-green-400 bg-green-500/10' : 'border-neutral-700 text-neutral-400 hover:text-neutral-300'}`}
+                >
+                    {soundEnabled ? '🔔 Som Ativado' : '🔕 Som Desativado'}
+                </button>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs"><div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>Ao Vivo</div>
             </div>
           </div>
         </div>
@@ -325,11 +452,21 @@ export default function CozinhaPanel() {
           <div className="w-72 flex flex-col bg-neutral-200/30 rounded-2xl p-4 min-h-[500px]">
              <div className="flex items-center justify-between mb-4 px-2">
                 <h2 className="font-bold text-base flex items-center gap-2 text-neutral-500"> Entregues</h2>
-                {deliveredOrders.length > 0 && (
-                  <button onClick={clearDelivered} className="text-neutral-400 hover:text-red-500 transition-colors p-1" title="Limpar Histórico">
-                    <Trash2 size={16} />
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={fetchHistory}
+                    title="Ver Histórico Completo"
+                    className="flex items-center gap-1 text-[11px] font-bold text-neutral-400 hover:text-amber-500 bg-white/60 hover:bg-amber-50 border border-neutral-200 hover:border-amber-300 px-2 py-1 rounded-full transition-all"
+                  >
+                    <History size={13} />
+                    {archivedCount > 0 && <span className="text-amber-500">{archivedCount}</span>}
                   </button>
-                )}
+                  {deliveredOrders.length > 0 && (
+                    <button onClick={archiveDelivered} className="text-neutral-400 hover:text-red-500 transition-colors p-1" title="Ocultar da lista">
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
              </div>
              <div className="space-y-3 flex-1 overflow-y-auto pr-1 pb-4">
                 {deliveredOrders.map(order => (
@@ -348,5 +485,46 @@ export default function CozinhaPanel() {
         </div>
       </main>
     </div>
+
+    {/* MODAL: HISTÓRICO COMPLETO */}
+    {showHistory && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-neutral-900/70 backdrop-blur-sm" onClick={() => setShowHistory(false)} />
+        <div className="relative bg-white w-full max-w-lg rounded-3xl shadow-2xl flex flex-col max-h-[80vh] animate-in zoom-in-95 duration-200">
+          <div className="flex items-center justify-between p-5 border-b border-neutral-100 shrink-0">
+            <div className="flex items-center gap-2 font-bold text-lg text-neutral-800">
+              <History size={20} className="text-amber-500" />
+              Histórico Completo de Entregues
+            </div>
+            <button onClick={() => setShowHistory(false)} className="p-2 rounded-full hover:bg-neutral-100 text-neutral-500 transition-colors">
+              <X size={20} />
+            </button>
+          </div>
+          <div className="overflow-y-auto flex-1 p-5 space-y-3">
+            {isLoadingHistory ? (
+              <div className="text-center py-10 text-neutral-400 font-medium">Carregando...</div>
+            ) : historyOrders.length === 0 ? (
+              <div className="text-center py-10 text-neutral-400 font-medium">Nenhum pedido entregue encontrado.</div>
+            ) : historyOrders.map(order => (
+              <div key={order.id} className="bg-neutral-50 border border-neutral-200 rounded-2xl p-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-black text-neutral-700">#{order.orderNumber}</span>
+                  <span className="text-xs text-neutral-400 font-medium">{order.createdAt}</span>
+                </div>
+                <p className="text-sm font-semibold text-neutral-600 mb-1">{order.customerName}</p>
+                <p className="text-xs text-neutral-400 truncate">
+                  {order.items.map(i => `${i.quantity}x ${i.product.name}`).join(' • ')}
+                </p>
+                <div className="flex justify-between items-center mt-2 pt-2 border-t border-neutral-100">
+                  <span className="text-[10px] font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full">ENTREGUE</span>
+                  <span className="font-bold text-neutral-700 text-sm">R$ {order.total.toFixed(2).replace('.', ',')}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   );
 }

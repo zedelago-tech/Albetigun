@@ -3,15 +3,16 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Settings, Edit2, Trash2, Plus, Image as ImageIcon, Save, X, PlusCircle, Lock, Store, LayoutGrid, BarChart3, TrendingUp, DollarSign } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 type Size = {
-  id: string;
+  id: number;
   name: string;
   price: number;
 };
 
 type Extra = {
-  id: string;
+  id: number;
   name: string;
   price: number;
 };
@@ -48,83 +49,99 @@ type Order = {
   deliveryType: string;
   tableNumber?: string;
 };
-
-const INITIAL_CATEGORIES = ['Sorvetes', 'Lanches', 'Bebidas', 'Sobremesas'];
-
 export default function AdminMenuPanel() {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return sessionStorage.getItem('sorvefood_admin_auth') === 'true';
-    }
-    return false;
-  });
+  const [isMounted, setIsMounted] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   
   const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'stats' | 'settings'>('products');
-  const [storeOpen, setStoreOpen] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sorvefood_store_status');
-      return saved !== null ? JSON.parse(saved) : true;
-    }
-    return true;
-  });
-  const [storeSettings, setStoreSettings] = useState<StoreSettings>(() => {
-    const defaultSettings = {
-      bannerImage: 'https://picsum.photos/seed/icecreamhero/1200/400',
-      bannerTitle: 'O Melhor Sorvete da Cidade',
-      bannerDescription: 'Sabor artesanal, ingredientes frescos e muito amor na receita.'
-    };
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sorvefood_store_settings');
-      if (saved) {
-        try { return JSON.parse(saved); } catch { return defaultSettings; }
-      }
-    }
-    return defaultSettings;
-  });
-
-  const [products, setProducts] = useState<Product[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sorvefood_products');
-      if (saved) {
-        try { return JSON.parse(saved); } catch { return []; }
-      }
-    }
-    return [];
-  });
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [categories, setCategories] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sorvefood_categories');
-      if (saved) {
-        try { return JSON.parse(saved); } catch { return INITIAL_CATEGORIES; }
-      }
-    }
-    return INITIAL_CATEGORIES;
-  });
-  const [orders, setOrders] = useState<Order[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sorvefood_orders');
-      if (saved) {
-        try { return JSON.parse(saved); } catch { return []; }
-      }
-    }
-    return [];
+  const [storeOpen, setStoreOpen] = useState(true);
+  
+  const [storeSettings, setStoreSettings] = useState<StoreSettings>({
+    bannerImage: 'https://picsum.photos/seed/icecreamhero/1200/400',
+    bannerTitle: 'O Melhor Sorvete da Cidade',
+    bannerDescription: 'Sabor artesanal, ingredientes frescos e muito amor na receita.'
   });
 
   useEffect(() => {
-    if (!localStorage.getItem('sorvefood_categories')) {
-      localStorage.setItem('sorvefood_categories', JSON.stringify(INITIAL_CATEGORIES));
+    setIsMounted(true);
+    if (typeof window !== 'undefined') {
+      if (
+        localStorage.getItem('sorvefood_admin_auth') === 'true' ||
+        sessionStorage.getItem('sorvefood_admin_auth') === 'true'
+      ) {
+        setIsAuthenticated(true);
+      }
+      const savedStatus = localStorage.getItem('sorvefood_store_status');
+      if (savedStatus !== null) setStoreOpen(JSON.parse(savedStatus));
+      
+      const savedSettings = localStorage.getItem('sorvefood_store_settings');
+      if (savedSettings) {
+        try { setStoreSettings(JSON.parse(savedSettings)); } catch {}
+      }
     }
   }, []);
 
+  const [products, setProducts] = useState<Product[]>([]);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [categories, setCategories] = useState<{id: number, name: string}[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+
+  async function loadData() {
+    const [{ data: cats }, { data: prods }, { data: sizes }, { data: extras }, { data: ords }] = await Promise.all([
+      supabase.from('categories').select('*').order('name', { ascending: true }),
+      supabase.from('products').select('*, categories(name)'),
+      supabase.from('product_sizes').select('*'),
+      supabase.from('product_extras').select('*'),
+      supabase.from('orders').select('*').order('created_at', { ascending: false })
+    ]);
+    
+    if (cats) setCategories(cats.map(c => ({ id: c.id, name: c.name })));
+    if (prods) {
+      setProducts(prods.map(p => ({
+        id: p.id,
+        name: p.name,
+        description: p.description || '',
+        price: Number(p.base_price) || 0,
+        category: p.categories?.name || 'Sem categoria',
+        image: p.image_url || 'https://picsum.photos/seed/icecream1/400/300',
+        isAvailable: p.is_available,
+        isHidden: p.is_hidden,
+        sizes: sizes?.filter(s => s.product_id === p.id).map(s => ({ id: s.id, name: s.name, price: Number(s.price) })) || [],
+        extras: extras?.filter(e => e.product_id === p.id).map(e => ({ id: e.id, name: e.name, price: Number(e.price) })) || [],
+      })));
+    }
+    if (ords) {
+       setOrders(ords.map(o => ({
+          id: o.id,
+          orderNumber: o.id.split('-').pop() || o.id,
+          status: o.status,
+          customerName: o.customer_name,
+          customerPhone: o.customer_phone,
+          paymentMethod: o.payment_method,
+          deliveryType: o.delivery_type,
+          tableNumber: o.table_number,
+          total: Number(o.total_amount),
+          createdAt: new Date(o.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          items: []
+       })));
+    }
+  }
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      loadData();
+    }
+  }, [isAuthenticated]);
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (passwordInput === 'admin123') {
+    const correctPassword = process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'admin123';
+    if (passwordInput === correctPassword) {
        setIsAuthenticated(true);
-       sessionStorage.setItem('sorvefood_admin_auth', 'true');
+       localStorage.setItem('sorvefood_admin_auth', 'true');
     } else {
-       alert('Senha incorreta (dica: admin123)');
+       alert('Senha incorreta!');
     }
   };
 
@@ -135,67 +152,61 @@ export default function AdminMenuPanel() {
     window.dispatchEvent(new Event('storage'));
   };
 
-  const addCategory = () => {
+  const addCategory = async () => {
     const newCat = window.prompt("Nome da nova Categoria:");
     if (newCat && newCat.trim()) {
-       const updated = [...new Set([...categories, newCat.trim()])];
-       setCategories(updated);
-       localStorage.setItem('sorvefood_categories', JSON.stringify(updated));
-       window.dispatchEvent(new Event('storage')); // notify customer app
+       const { error } = await supabase.from('categories').insert({ name: newCat.trim() });
+       if (error) {
+         console.error("Erro ao criar categoria:", error.message, error.details);
+         alert(`Erro ao criar categoria: ${error.message}`);
+       } else {
+         loadData();
+       }
     }
   };
 
-  const deleteCategory = (cat: string) => {
-    if (window.confirm(`Remover categoria "${cat}"? (Produtos continuarão existindo mas sem essa categoria no filtro)`)) {
-       const updated = categories.filter(c => c !== cat);
-       setCategories(updated);
-       localStorage.setItem('sorvefood_categories', JSON.stringify(updated));
-       window.dispatchEvent(new Event('storage'));
+  const deleteCategory = async (id: number, name: string) => {
+    if (window.confirm(`Remover categoria "${name}"? (Produtos continuarão existindo mas sem essa categoria no filtro)`)) {
+       const { error } = await supabase.from('categories').delete().eq('id', id);
+       if (error) {
+         console.error("Erro ao deletar categoria:", error.message, error.details);
+         alert(`Erro ao deletar categoria: ${error.message}`);
+       } else {
+         loadData();
+       }
     }
   };
 
-  useEffect(() => {
-    const loadProducts = () => {
-      const saved = localStorage.getItem('sorvefood_products');
-      if (saved) {
-        try {
-          setProducts(JSON.parse(saved));
-        } catch (e) {
-          console.error("Failed to parse products");
-        }
-      }
-    };
-    loadProducts();
-
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'sorvefood_products') {
-        loadProducts();
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  const saveProducts = (newProducts: Product[]) => {
-    setProducts(newProducts);
-    localStorage.setItem('sorvefood_products', JSON.stringify(newProducts));
-    
-    // Simulate storage event for same-window updates
-    window.dispatchEvent(new Event('storage'));
+  const toggleProductAvailability = async (id: number) => {
+    const p = products.find(prod => prod.id === id);
+    if (p) {
+       const nextVal = !p.isAvailable;
+       const { error } = await supabase.from('products').update({ is_available: nextVal }).eq('id', id);
+       if (error) {
+         console.error("Erro ao alternar disponibilidade:", error.message, error.details);
+         alert(`Erro ao alternar disponibilidade: ${error.message || 'Erro de RLS / Permissão'}`);
+       } else {
+         setProducts(prev => prev.map(prod => prod.id === id ? { ...prod, isAvailable: nextVal } : prod));
+       }
+    }
   };
 
-  const toggleProductAvailability = (id: number) => {
-    const updated = products.map(p => p.id === id ? { ...p, isAvailable: p.isAvailable === false ? true : false } : p);
-    saveProducts(updated);
-  };
-
-  const toggleProductVisibility = (id: number) => {
-    const updated = products.map(p => p.id === id ? { ...p, isHidden: p.isHidden === true ? false : true } : p);
-    saveProducts(updated);
+  const toggleProductVisibility = async (id: number) => {
+    const p = products.find(prod => prod.id === id);
+    if (p) {
+       const nextVal = !p.isHidden;
+       const { error } = await supabase.from('products').update({ is_hidden: nextVal }).eq('id', id);
+       if (error) {
+         console.error("Erro ao alternar visibilidade:", error.message, error.details);
+         alert(`Erro ao alternar visibilidade: ${error.message || 'Erro de RLS / Permissão'}`);
+       } else {
+         setProducts(prev => prev.map(prod => prod.id === id ? { ...prod, isHidden: nextVal } : prod));
+       }
+    }
   };
 
   const handleEditClick = (product: Product) => {
-    setEditingProduct({ ...product }); // deep copy if needed, but shallow is okay for primitives, note extras
+    setEditingProduct({ ...product });
     if (product.extras) {
         setEditingProduct(prev => prev ? { ...prev, extras: [...product.extras!] } : null);
     }
@@ -204,41 +215,122 @@ export default function AdminMenuPanel() {
     }
   };
 
-  const handleDeleteClick = (id: number) => {
-    if (window.confirm("Certeza que deseja remover este produto?")) {
-      const updated = products.filter(p => p.id !== id);
-      saveProducts(updated);
+  const handleDeleteClick = async (id: number) => {
+    if (window.confirm("Certeza que deseja remover este produto? Isso também apagará os tamanhos e adicionais vinculados a ele.")) {
+      try {
+        // 1. Apaga os tamanhos vinculados
+        await supabase.from('product_sizes').delete().eq('product_id', id);
+        
+        // 2. Apaga os adicionais vinculados
+        await supabase.from('product_extras').delete().eq('product_id', id);
+
+        // 3. Apaga o produto
+        const { error } = await supabase.from('products').delete().eq('id', id);
+        
+        if (error) {
+          console.error("Erro ao deletar produto:", error.message, error.details, error.hint, error.code);
+          if (error.code === '23503') {
+            alert("Este produto já foi pedido por algum cliente em pedidos antigos e não pode ser deletado fisicamente para não corromper o histórico. Dica: Use a opção 'Ocultar' para tirá-lo do cardápio!");
+          } else {
+            alert(`Erro ao remover produto: ${error.message || 'Erro de RLS / Permissão'}`);
+          }
+        } else {
+          // Remove o produto da tela na mesma hora
+          setProducts(prev => prev.filter(prod => prod.id !== id));
+          loadData();
+        }
+      } catch (err: any) {
+        console.error("Erro geral ao deletar:", err.message || err);
+        alert("Ocorreu um erro ao tentar apagar o produto.");
+      }
     }
   };
 
   const handleAddProduct = () => {
     const newProduct: Product = {
-      id: Date.now(),
+      id: 0,
       name: 'Novo Produto',
       description: 'Descrição do produto',
       price: 0,
-      category: 'Lanches',
+      category: categories[0]?.name || 'Lanches',
       image: 'https://picsum.photos/seed/new/400/300',
       extras: [],
       sizes: [],
-      isAvailable: true
+      isAvailable: true,
+      isHidden: false
     };
     setEditingProduct(newProduct);
   };
 
-  const handleSaveModal = () => {
+  const handleSaveModal = async () => {
     if (editingProduct) {
-      const exists = products.some(p => p.id === editingProduct.id);
-      let updated: Product[];
-      if (exists) {
-        updated = products.map(p => p.id === editingProduct.id ? editingProduct : p);
-      } else {
-        updated = [...products, editingProduct];
+      const { data: catData, error: catError } = await supabase.from('categories').select('id').eq('name', editingProduct.category).single();
+      const categoryId = catData?.id;
+
+      if (!categoryId) {
+         alert(`Categoria "${editingProduct.category}" não encontrada no banco. Crie a categoria primeiro!`);
+         return;
       }
-      saveProducts(updated);
+
+      const productDB = {
+        name: editingProduct.name,
+        description: editingProduct.description,
+        base_price: editingProduct.price,
+        image_url: editingProduct.image,
+        category_id: categoryId,
+        is_available: editingProduct.isAvailable !== false,
+        is_hidden: editingProduct.isHidden === true
+      };
+
+      let productId = editingProduct.id;
+
+      if (productId === 0) {
+         const { data: pData, error: pError } = await supabase.from('products').insert(productDB).select().single();
+         if (pError) {
+            console.error("Erro ao criar produto:", pError);
+            alert("Erro ao criar produto. Verifique o console.");
+            return;
+         }
+         if (pData) productId = pData.id;
+      } else {
+         const { error: uError } = await supabase.from('products').update(productDB).eq('id', productId);
+         if (uError) {
+            console.error("Erro ao atualizar produto:", uError);
+            alert("Erro ao atualizar produto.");
+            return;
+         }
+      }
+
+      if (productId > 0) {
+         await supabase.from('product_sizes').delete().eq('product_id', productId);
+         if (editingProduct.sizes && editingProduct.sizes.length > 0) {
+            const sizesDB = editingProduct.sizes.map(s => ({
+               product_id: productId,
+               name: s.name,
+               price: s.price
+            }));
+            const { error: sError } = await supabase.from('product_sizes').insert(sizesDB);
+            if (sError) console.error("Erro ao inserir tamanhos:", sError);
+         }
+
+         await supabase.from('product_extras').delete().eq('product_id', productId);
+         if (editingProduct.extras && editingProduct.extras.length > 0) {
+            const extrasDB = editingProduct.extras.map(e => ({
+               product_id: productId,
+               name: e.name,
+               price: e.price
+            }));
+            const { error: eError } = await supabase.from('product_extras').insert(extrasDB);
+            if (eError) console.error("Erro ao inserir adicionais:", eError);
+         }
+      }
+
       setEditingProduct(null);
+      loadData();
     }
   };
+
+  if (!isMounted) return null;
 
   if (!isAuthenticated) {
     return (
@@ -478,10 +570,10 @@ export default function AdminMenuPanel() {
             </div>
             <div className="bg-white rounded-2xl shadow-sm border border-neutral-200 overflow-hidden divide-y divide-neutral-100">
                {categories.map(cat => (
-                 <div key={cat} className="p-4 flex items-center justify-between hover:bg-neutral-50 transition-colors">
-                    <span className="font-bold text-neutral-800">{cat}</span>
+                 <div key={cat.id} className="p-4 flex items-center justify-between hover:bg-neutral-50 transition-colors">
+                    <span className="font-bold text-neutral-800">{cat.name}</span>
                     <button 
-                      onClick={() => deleteCategory(cat)}
+                      onClick={() => deleteCategory(cat.id, cat.name)}
                       className="p-2 text-neutral-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors bg-white border border-neutral-100"
                     >
                       <Trash2 size={18} />
@@ -616,7 +708,7 @@ export default function AdminMenuPanel() {
                        onChange={e => setEditingProduct({...editingProduct, category: e.target.value})}
                        className="flex-1 border border-neutral-300 rounded-xl px-3 py-2 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-neutral-900 bg-white"
                     >
-                       {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                       {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     </select>
                     <button onClick={addCategory} className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 rounded-xl font-bold transition-colors text-sm shrink-0">
                        + Nova
@@ -639,7 +731,7 @@ export default function AdminMenuPanel() {
                  <div className="flex justify-between items-center mb-2">
                    <label className="block text-sm font-bold text-neutral-700">Tamanhos / Variações</label>
                    <button 
-                     onClick={() => setEditingProduct(prev => prev ? {...prev, sizes: [...(prev.sizes||[]), {id: 's'+Date.now(), name: '', price: 0}]} : prev)}
+                     onClick={() => setEditingProduct(prev => prev ? {...prev, sizes: [...(prev.sizes||[]), {id: Date.now(), name: '', price: 0}]} : prev)}
                      className="text-xs font-bold text-amber-500 hover:text-amber-600 flex items-center gap-1"
                    >
                      <PlusCircle size={14} /> Novo
@@ -694,7 +786,7 @@ export default function AdminMenuPanel() {
                  <div className="flex justify-between items-center mb-2">
                    <label className="block text-sm font-bold text-neutral-700">Adicionais</label>
                    <button 
-                     onClick={() => setEditingProduct(prev => prev ? {...prev, extras: [...(prev.extras||[]), {id: 'e'+Date.now(), name: '', price: 0}]} : prev)}
+                     onClick={() => setEditingProduct(prev => prev ? {...prev, extras: [...(prev.extras||[]), {id: Date.now(), name: '', price: 0}]} : prev)}
                      className="text-xs font-bold text-amber-500 hover:text-amber-600 flex items-center gap-1"
                    >
                      <PlusCircle size={14} /> Novo

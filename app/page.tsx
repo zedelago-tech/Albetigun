@@ -1,19 +1,20 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, IceCream, Search, Plus, X, Minus, ClipboardList, Home as HomeIcon } from 'lucide-react';
+import { ShoppingCart, IceCream, Search, Plus, X, Minus, ClipboardList, Home as HomeIcon, Trash2 } from 'lucide-react';
 import Image from 'next/image';
+import { supabase } from '@/lib/supabase';
 
 const INITIAL_CATEGORIES = ['Sorvetes', 'Lanches', 'Bebidas', 'Sobremesas'];
 
 type Size = {
-  id: string;
+  id: number;
   name: string;
   price: number;
 };
 
 type Extra = {
-  id: string;
+  id: number;
   name: string;
   price: number;
 };
@@ -88,20 +89,10 @@ export default function Home() {
   const [activeCategory, setActiveCategory] = useState('Todos');
   const [searchQuery, setSearchQuery] = useState('');
   
-  const [categories, setCategories] = useState<string[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sorvefood_categories');
-      return saved ? JSON.parse(saved) : INITIAL_CATEGORIES;
-    }
-    return INITIAL_CATEGORIES;
-  });
-  const [products, setProducts] = useState<Product[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sorvefood_products');
-      return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
-    }
-    return INITIAL_PRODUCTS;
-  });
+  type CategoryItem = { id?: number | string, name: string };
+  const [categories, setCategories] = useState<CategoryItem[]>([{ id: 'todos', name: 'Todos' }]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoadingMenu, setIsLoadingMenu] = useState(true);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [orderSuccessMsg, setOrderSuccessMsg] = useState<{orderNumber: string} | null>(null);
   
@@ -110,131 +101,127 @@ export default function Home() {
   const [tempSize, setTempSize] = useState<Size | undefined>(undefined);
   const [tempQuantity, setTempQuantity] = useState(1);
 
-  const [customerName, setCustomerName] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sorvefood_customer');
-      if (saved) {
-        try { return JSON.parse(saved).name || ''; } catch { return ''; }
-      }
-    }
-    return '';
-  });
-  const [customerPhone, setCustomerPhone] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sorvefood_customer');
-      if (saved) {
-        try { return JSON.parse(saved).phone || ''; } catch { return ''; }
-      }
-    }
-    return '';
-  });
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'DINHEIRO' | 'CARTAO' | 'PIX'>('PIX');
   const [deliveryType, setDeliveryType] = useState<'BALCAO' | 'MESA'>('BALCAO');
   const [tableNumber, setTableNumber] = useState('');
-  const [storeOpen, setStoreOpen] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sorvefood_store_status');
-      return saved !== null ? JSON.parse(saved) : true;
-    }
-    return true;
-  });
-  const [storeSettings, setStoreSettings] = useState<StoreSettings>(() => {
-    const defaultSettings = {
-      bannerImage: 'https://picsum.photos/seed/icecreamhero/1200/400',
-      bannerTitle: 'O Melhor Sorvete da Cidade',
-      bannerDescription: 'Sabor artesanal, ingredientes frescos e muito amor na receita.'
-    };
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sorvefood_store_settings');
-      if (saved) {
-        try { return JSON.parse(saved); } catch { return defaultSettings; }
-      }
-    }
-    return defaultSettings;
+  const [storeOpen, setStoreOpen] = useState(true);
+  const [storeSettings, setStoreSettings] = useState<StoreSettings>({
+    bannerImage: 'https://picsum.photos/seed/icecreamhero/1200/400',
+    bannerTitle: 'O Melhor Sorvete da Cidade',
+    bannerDescription: 'Sabor artesanal, ingredientes frescos e muito amor na receita.'
   });
 
-  const [myOrders, setMyOrders] = useState<Order[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sorvefood_orders');
-      if (saved) {
-        try { return JSON.parse(saved); } catch { return []; }
-      }
-    }
-    return [];
-  });
+  const [myOrders, setMyOrders] = useState<Order[]>([]);
+  const [isTableFromUrl, setIsTableFromUrl] = useState(false);
 
   useEffect(() => {
-    // Initial sync for defaults if not set
-    if (!localStorage.getItem('sorvefood_categories')) {
-      localStorage.setItem('sorvefood_categories', JSON.stringify(INITIAL_CATEGORIES));
+    // Capture mesa from URL
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const mesaParam = urlParams.get('mesa');
+      if (mesaParam) {
+        setTableNumber(mesaParam);
+        setDeliveryType('MESA');
+        setIsTableFromUrl(true);
+      }
+    } catch (e) {}
+
+    // Hydrate states from localStorage on client mount to avoid hydration mismatch
+    try {
+      const savedCustomer = localStorage.getItem('sorvefood_customer');
+      if (savedCustomer) {
+        const parsed = JSON.parse(savedCustomer);
+        if (parsed.name) setCustomerName(parsed.name);
+        if (parsed.phone) setCustomerPhone(parsed.phone);
+      }
+    } catch (e) {}
+
+    try {
+      const savedStatus = localStorage.getItem('sorvefood_store_status');
+      if (savedStatus !== null) setStoreOpen(JSON.parse(savedStatus));
+    } catch (e) {}
+
+    try {
+      const savedSettings = localStorage.getItem('sorvefood_store_settings');
+      if (savedSettings) setStoreSettings(JSON.parse(savedSettings));
+    } catch (e) {}
+
+    try {
+      const savedOrders = localStorage.getItem('sorvefood_orders');
+      if (savedOrders) setMyOrders(JSON.parse(savedOrders));
+    } catch (e) {}
+
+    async function fetchData() {
+      setIsLoadingMenu(true);
+      const [{ data: cats }, { data: prods }, { data: sizes }, { data: extras }] = await Promise.all([
+        supabase.from('categories').select('*').order('name', { ascending: true }),
+        supabase.from('products').select('*, categories(name)'),
+        supabase.from('product_sizes').select('*'),
+        supabase.from('product_extras').select('*')
+      ]);
+      
+      if (cats) setCategories([{ id: 'todos', name: 'Todos' }, ...cats.map(c => ({ id: c.id, name: c.name }))]);
+      if (prods) {
+        setProducts(prods.map(p => ({
+          id: p.id,
+          name: p.name,
+          description: p.description || '',
+          price: Number(p.base_price) || 0,
+          category: p.categories?.name || 'Sem categoria',
+          image: p.image_url || 'https://picsum.photos/seed/icecream1/400/300',
+          isAvailable: p.is_available,
+          isHidden: p.is_hidden,
+          sizes: sizes?.filter(s => s.product_id === p.id).map(s => ({ id: s.id, name: s.name, price: Number(s.price) })) || [],
+          extras: extras?.filter(e => e.product_id === p.id).map(e => ({ id: e.id, name: e.name, price: Number(e.price) })) || [],
+        })));
+      }
+      setIsLoadingMenu(false);
     }
-    if (!localStorage.getItem('sorvefood_products')) {
-      localStorage.setItem('sorvefood_products', JSON.stringify(INITIAL_PRODUCTS));
-    }
+    fetchData();
 
     const handleCatsChange = (e: StorageEvent) => {
-      if (e.key === 'sorvefood_categories') {
-        const updated = localStorage.getItem('sorvefood_categories');
-        if (updated) setCategories(JSON.parse(updated));
-      }
       if (e.key === 'sorvefood_store_settings') {
         const updated = localStorage.getItem('sorvefood_store_settings');
         if (updated) setStoreSettings(JSON.parse(updated));
       }
-    };
-    window.addEventListener('storage', handleCatsChange);
-
-    const handleStatusChange = (e: StorageEvent) => {
       if (e.key === 'sorvefood_store_status') {
          setStoreOpen(e.newValue ? JSON.parse(e.newValue) : true);
       }
     };
-    window.addEventListener('storage', handleStatusChange);
+    window.addEventListener('storage', handleCatsChange);
 
-    return () => {
-       window.removeEventListener('storage', handleCatsChange);
-       window.removeEventListener('storage', handleStatusChange);
-    };
+    return () => window.removeEventListener('storage', handleCatsChange);
   }, []);
 
   useEffect(() => {
-    const handleProductsChange = (e: StorageEvent) => {
-      if (e.key === 'sorvefood_products') {
-        const updated = localStorage.getItem('sorvefood_products');
-        if (updated) setProducts(JSON.parse(updated));
-      }
-    };
-    window.addEventListener('storage', handleProductsChange);
-
-    return () => window.removeEventListener('storage', handleProductsChange);
-  }, []);
-
-  useEffect(() => {
-    // Listen to changes from other tabs (kitchen updating status)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'sorvefood_orders') {
-        const updated = localStorage.getItem('sorvefood_orders');
-        if (updated) setMyOrders(JSON.parse(updated));
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Poll fallback just in case
-    const interval = setInterval(() => {
-      const updated = localStorage.getItem('sorvefood_orders');
-      if (updated) {
+    async function syncOrders() {
+      if (myOrders.length === 0) return;
+      const ids = myOrders.map(o => o.id);
+      const { data } = await supabase.from('orders').select('id, status').in('id', ids);
+      if (data) {
         setMyOrders(prev => {
-          if (JSON.stringify(prev) !== updated) return JSON.parse(updated);
+          let changed = false;
+          const updated = prev.map(o => {
+            const dbOrd = data.find(d => d.id === o.id);
+            if (dbOrd && dbOrd.status !== o.status) {
+              changed = true;
+              return { ...o, status: dbOrd.status as 'PREPARANDO' | 'PRONTO' | 'ENTREGUE' };
+            }
+            return o;
+          });
+          if (changed) {
+            localStorage.setItem('sorvefood_orders', JSON.stringify(updated));
+            return updated;
+          }
           return prev;
         });
       }
-    }, 2000);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
-    };
-  }, []);
+    }
+    const interval = setInterval(syncOrders, 3000);
+    return () => clearInterval(interval);
+  }, [myOrders]);
 
   useEffect(() => {
     if (orderSuccessMsg || selectedProduct) {
@@ -302,49 +289,114 @@ export default function Home() {
     }));
   };
 
-  const handleAppCheckout = () => {
+  const handleAppCheckout = async () => {
     if (cartItems.length === 0 || !customerName.trim()) return;
     if (deliveryType === 'MESA' && !tableNumber.trim()) return;
 
     const array = new Uint32Array(1);
     self.crypto.getRandomValues(array);
     const orderNumber = (1000 + (array[0] % 9000)).toString();
-    const newOrder: Order = {
-      id: crypto.randomUUID(),
-      orderNumber,
-      items: [...cartItems],
-      total: cartTotal,
-      status: 'PREPARANDO',
-      createdAt: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      customerName: customerName.trim(),
-      customerPhone: customerPhone.trim(),
-      paymentMethod,
-      deliveryType,
-      tableNumber: deliveryType === 'MESA' ? tableNumber.trim() : undefined,
+    const paymentMap: Record<string, 'DINHEIRO' | 'CARTAO' | 'PIX'> = {
+      'dinheiro': 'DINHEIRO',
+      'cartao': 'CARTAO',
+      'cartão': 'CARTAO',
+      'pix': 'PIX'
     };
-    localStorage.setItem('sorvefood_customer', JSON.stringify({ name: customerName.trim(), phone: customerPhone.trim() }));
-    setMyOrders(prev => {
-      const updated = [newOrder, ...prev];
-      localStorage.setItem('sorvefood_orders', JSON.stringify(updated));
-      return updated;
-    });
-    setOrderSuccessMsg({ orderNumber });
-    setCartItems([]);
-    setActiveTab('orders');
+
+    const deliveryMap: Record<string, 'MESA' | 'BALCAO' | 'ENTREGA'> = {
+      'mesa': 'MESA',
+      'na mesa': 'MESA',
+      'balcao': 'BALCAO',
+      'no balcão': 'BALCAO',
+      'entrega': 'ENTREGA'
+    };
+
+    const normalizeEnum = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+    const paymentMethodFormated = paymentMap[paymentMethod.toLowerCase()] || normalizeEnum(paymentMethod);
+    const deliveryTypeFormated = deliveryMap[deliveryType.toLowerCase()] || normalizeEnum(deliveryType);
+
+    const orderId = crypto.randomUUID();
+
+    const newOrderDB = {
+      id: orderId,
+      customer_name: customerName.trim(),
+      customer_phone: customerPhone ? customerPhone.trim() : null,
+      status: 'NOVO',
+      payment_method: paymentMethodFormated,
+      delivery_type: deliveryTypeFormated,
+      table_number: deliveryTypeFormated === 'MESA' ? tableNumber.toString() : null,
+      total_amount: parseFloat(cartTotal.toFixed(2))
+    };
+
+    try {
+      const { data: orderData, error: orderError } = await supabase.from('orders').insert(newOrderDB).select().single();
+      if (orderError) {
+         console.error("Erro orders:", orderError.message, orderError.details, orderError.hint, orderError.code);
+         throw orderError;
+      }
+
+      for (const item of cartItems) {
+        const { data: itemData, error: itemError } = await supabase.from('order_items').insert({
+          order_id: orderId,
+          product_id: item.product.id,
+          size_id: item.selectedSize ? item.selectedSize.id : null,
+          quantity: item.quantity,
+          unit_price: parseFloat((item.selectedSize ? item.selectedSize.price : item.product.price).toFixed(2)),
+          obs: null
+        }).select().single();
+
+        if (itemError) {
+          console.error("Erro order_items:", itemError.message, itemError.details, itemError.hint, itemError.code);
+          throw itemError;
+        }
+
+        if (item.selectedExtras.length > 0 && itemData) {
+          const extrasToInsert = item.selectedExtras.map(ex => ({
+             order_item_id: itemData.id,
+             extra_id: Number(ex.id),
+             price: parseFloat((ex.price || 0).toFixed(2))
+          }));
+          const { error: extError } = await supabase.from('order_item_extras').insert(extrasToInsert);
+          if (extError) {
+            console.error("Erro order_item_extras:", extError.message, extError.details, extError.hint, extError.code);
+            throw extError;
+          }
+        }
+      }
+
+      const localOrder: Order = {
+        id: orderId,
+        orderNumber: orderId.split('-').pop()?.toUpperCase() || orderNumber,
+        items: [...cartItems],
+        total: cartTotal,
+        status: 'NOVO',
+        createdAt: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        paymentMethod,
+        deliveryType,
+        tableNumber: deliveryType === 'MESA' ? tableNumber.trim() : undefined,
+      };
+
+      localStorage.setItem('sorvefood_customer', JSON.stringify({ name: customerName.trim(), phone: customerPhone.trim() }));
+      setMyOrders(prev => {
+        const updated = [localOrder, ...prev];
+        localStorage.setItem('sorvefood_orders', JSON.stringify(updated));
+        return updated;
+      });
+      setOrderSuccessMsg({ orderNumber: localOrder.orderNumber });
+      setCartItems([]);
+      setActiveTab('orders');
+    } catch (err: any) {
+      console.error("Erro geral checkout:", err.message || err);
+      alert(`Erro ao enviar o pedido para a cozinha: ${err.message || 'Verifique o console'}`);
+    }
   };
 
-  const simulateOrderStatusChange = (orderNumber: string) => {
-    setMyOrders(prev => {
-      const updated = prev.map(order => {
-        if (order.orderNumber === orderNumber) {
-          if (order.status === 'PREPARANDO') return { ...order, status: 'PRONTO' as const };
-          if (order.status === 'PRONTO') return { ...order, status: 'ENTREGUE' as const };
-        }
-        return order;
-      });
-      localStorage.setItem('sorvefood_orders', JSON.stringify(updated));
-      return updated;
-    });
+  // Limpa o histórico local do cliente sem afetar o banco de dados
+  const handleClearHistory = () => {
+    setMyOrders([]);
+    localStorage.removeItem('sorvefood_orders');
   };
 
   return (
@@ -379,17 +431,17 @@ export default function Home() {
             {/* Categorias */}
             <section className="mb-6">
               <div className="flex items-center gap-3 overflow-x-auto pb-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                {['Todos', ...categories].map(category => (
+                {categories.map(category => (
                   <button
-                    key={category}
-                    onClick={() => setActiveCategory(category)}
+                    key={category.id || category.name}
+                    onClick={() => setActiveCategory(category.name)}
                     className={`flex-shrink-0 px-5 py-2.5 rounded-full font-medium transition-all text-sm ${
-                      activeCategory === category 
+                      activeCategory === category.name 
                         ? 'bg-amber-500 text-white shadow-md' 
                         : 'bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50'
                     }`}
                   >
-                    {category}
+                    {category.name}
                   </button>
                 ))}
               </div>
@@ -509,13 +561,20 @@ export default function Home() {
                   
                   {deliveryType === 'MESA' && (
                     <div className="animate-in slide-in-from-top-2">
-                       <label className="block text-sm font-bold text-neutral-700 mb-1">Número da Mesa *</label>
+                       <label className="block text-sm font-bold text-neutral-700 mb-1">
+                         Número da Mesa * {isTableFromUrl && <span className="text-amber-600 font-bold text-xs ml-1 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100 animate-pulse">Mesa {tableNumber} via QR Code</span>}
+                       </label>
                        <input 
                          type="text" 
                          value={tableNumber}
                          onChange={e => setTableNumber(e.target.value)}
+                         disabled={isTableFromUrl}
                          placeholder="Ex: 12"
-                         className="w-full border border-neutral-300 rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 bg-amber-50/50"
+                         className={`w-full border rounded-xl px-4 py-3 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 ${
+                           isTableFromUrl 
+                             ? 'bg-neutral-100 border-neutral-200 text-neutral-500 cursor-not-allowed font-semibold' 
+                             : 'bg-amber-50/50 border-neutral-300'
+                         }`}
                        />
                     </div>
                   )}
@@ -555,7 +614,21 @@ export default function Home() {
         {/* ABA: HISTÓRICO DE PEDIDOS */}
         {activeTab === 'orders' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-             <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><ClipboardList className="text-amber-500"/> Seus Pedidos</h2>
+             <div className="flex items-center justify-between mb-6">
+               <h2 className="text-2xl font-bold flex items-center gap-2">
+                 <ClipboardList className="text-amber-500"/> Seus Pedidos
+               </h2>
+               {myOrders.length > 0 && (
+                 <button
+                   onClick={handleClearHistory}
+                   title="Limpar histórico"
+                   className="flex items-center gap-1.5 text-xs font-bold text-neutral-400 hover:text-red-500 bg-neutral-100 hover:bg-red-50 border border-neutral-200 hover:border-red-200 px-3 py-1.5 rounded-full transition-all duration-200"
+                 >
+                   <Trash2 size={13} />
+                   Limpar Histórico
+                 </button>
+               )}
+             </div>
              <div className="space-y-4">
               {myOrders.length === 0 ? (
                 <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-neutral-300">
@@ -569,8 +642,7 @@ export default function Home() {
                       <span className="text-xs text-neutral-400 font-medium block">Nº DO PEDIDO</span>
                       <span className="font-black text-lg text-neutral-900">#{order.orderNumber}</span>
                     </div>
-                    <button 
-                      onClick={() => simulateOrderStatusChange(order.orderNumber)} 
+                    <span 
                       className={`text-xs px-3 py-1.5 rounded-full font-bold transition-colors ${
                         order.status === 'PREPARANDO' ? 'bg-amber-100 text-amber-600' :
                         order.status === 'PRONTO' ? 'bg-green-100 text-green-600' :
@@ -578,7 +650,7 @@ export default function Home() {
                       }`}
                     >
                       {order.status}
-                    </button>
+                    </span>
                   </div>
                   
                   <div className="space-y-3 mb-4">
